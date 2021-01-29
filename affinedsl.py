@@ -2,19 +2,23 @@
 
 Affine expression construction:
   >>> with _ir.Context():
-  ...   (S.K + S.M).build()
-  ...   (S.K * S.M).build()
-  ...   (S.K // S.M).build()
-  ...   (S.K / S.M).build()
-  ...   (S.K % 4).build()
-  ...   (D.i + D.j * 4).build()
-  (AffineExpr(s0 + s1), {'K': 0, 'M': 1}, {})
-  (AffineExpr(s0 * s1), {'K': 0, 'M': 1}, {})
-  (AffineExpr(s0 floordiv s1), {'K': 0, 'M': 1}, {})
-  (AffineExpr(s0 ceildiv s1), {'K': 0, 'M': 1}, {})
-  (AffineExpr(s0 mod 4), {'K': 0}, {})
-  (AffineExpr(d0 + d1 * 4), {}, {'i': 0, 'j': 1})
-
+  ...   s = AffineBuildState()
+  ...   (S.K + S.M).build(s)
+  ...   (S.K * S.M).build(s)
+  ...   (S.K // S.M).build(s)
+  ...   (S.K / S.M).build(s)
+  ...   (S.K % 4).build(s)
+  ...   (D.i + D.j * 4).build(s)
+  ...   s
+  AffineExpr(s0 + s1)
+  AffineExpr(s0 * s1)
+  AffineExpr(s0 floordiv s1)
+  AffineExpr(s0 ceildiv s1)
+  AffineExpr(s0 mod 4)
+  AffineExpr(d0 + d1 * 4)
+  AffineBuildState<
+    symbols={'K': 0, 'M': 1}
+    dims={'i': 0, 'j': 1}>
 """
 
 from typing import Dict, Optional, Tuple, Union
@@ -22,18 +26,19 @@ from typing import Dict, Optional, Tuple, Union
 from mlir import ir as _ir
 
 __all__ = [
-  "AffineExprDef",
-  "D",
-  "DimDef",
-  "S",
-  "SymbolDef",
+    "AffineBuildState",
+    "AffineExprDef",
+    "D",
+    "DimDef",
+    "S",
+    "SymbolDef",
 ]
 
 # Type aliases.
 SymbolPosMap = Dict[str, int]
 
 
-class _AffineBuildState:
+class AffineBuildState:
   """Internal state for the AffineExprDef._create impls."""
 
   def __init__(self):
@@ -41,18 +46,24 @@ class _AffineBuildState:
     self.symbol_pos_map = dict()  # type: Dict[str, int]
     self.dim_pos_map = dict()  # type: Dict[str, int]
 
+  def __repr__(self):
+    lines = [f"AffineBuildState<"]
+    lines.append(f"  symbols={self.symbol_pos_map}")
+    lines.append(f"  dims={self.dim_pos_map}>")
+    return "\n".join(lines)
+
 
 class AffineExprDef:
   """Base class for an affine expression being defined."""
 
-  def build(self) -> Tuple[_ir.AffineExpr, SymbolPosMap]:
+  def build(self, state: Optional[AffineBuildState] = None) -> _ir.AffineExpr:
     """Builds the corresponding _ir.AffineExpr from the definitions.
     """
-    state = _AffineBuildState()
+    state = AffineBuildState() if state is None else state
     expr = self._create(state)
-    return expr, state.symbol_pos_map, state.dim_pos_map
+    return expr
 
-  def _create(self, state: _AffineBuildState) -> _ir.AffineExpr:
+  def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     raise NotImplementedError()
 
   @staticmethod
@@ -91,7 +102,7 @@ class AffineConstantExpr(AffineExprDef):
     assert isinstance(value, int)
     self.value = value
 
-  def _create(self, state: _AffineBuildState) -> _ir.AffineExpr:
+  def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     return _ir.AffineConstantExpr.get(self.value)
 
 
@@ -103,7 +114,7 @@ class AffineBinaryExprDef(AffineExprDef):
     self.lhs = lhs
     self.rhs = rhs
 
-  def _create(self, state: _AffineBuildState) -> _ir.AffineExpr:
+  def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     return self.ir_ctor.get(self.lhs._create(state), self.rhs._create(state))
 
 
@@ -125,7 +136,7 @@ class DimDef(AffineExprDef):
   def __repr__(self):
     return f"Dim({self.dimname})"
 
-  def _create(self, state: _AffineBuildState) -> _ir.AffineExpr:
+  def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     pos = state.dim_pos_map.get(self.dimname)
     if pos is None:
       pos = len(state.dim_pos_map)
@@ -180,7 +191,7 @@ class SymbolDef(AffineExprDef):
   def __repr__(self):
     return f"Symbol({self.symname})"
 
-  def _create(self, state: _AffineBuildState) -> _ir.AffineExpr:
+  def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     pos = state.symbol_pos_map.get(self.symname)
     if pos is None:
       pos = len(state.symbol_pos_map)
