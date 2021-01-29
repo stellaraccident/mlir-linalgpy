@@ -49,11 +49,10 @@ def specialize(**type_bindings):
       {'T': Type(i8), 'TACCUM': Type(i32)}
 
     Looking to add something like:
-      input_match('A', type='T')['M', 'K']
-      input_match('B', type='T')['K', 'N']
-      output_match('C', type='TACCUM')['M', 'N']
-      ref('C')['m', 'n'] += reduce('k')(
-        ref('A')['k', 'm'] * ref('B')['n', 'k'])
+      A = input_match('A', type='T')['M', 'K']
+      B = input_match('B', type='T')['K', 'N']
+      C = output_match('C', type='TACCUM')['M', 'N']
+      C['m', 'n'] += reduce('k')(A['k', 'm'] * B['n', 'k'])
 
     Probably add a bunch of predefined symbol constants so that things like
     M, N, K, k, etc can just be used literal? Probably have all of these
