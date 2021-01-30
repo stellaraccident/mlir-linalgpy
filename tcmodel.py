@@ -1,6 +1,6 @@
 """Model classes representing a tensor-comprehension."""
 
-from typing import Dict, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from mlir import ir as _ir
 
@@ -12,7 +12,12 @@ ShapeCoercable = Optional[Union[_ir.AffineMap, Sequence[AffineExprDef]]]
 TypePredicate = Union[str, _ir.Type]
 
 
-class TensorUse:
+class Expression:
+  """An expression that can appear on the RHS of a comprehension."""
+  pass
+
+
+class TensorUse(Expression):
   """A used tensor represented by its (tensor_name, indexing_map)."""
 
   def __init__(self, tensor_name: str, indexing_map: _ir.AffineMap):
@@ -77,16 +82,92 @@ class Comprehension:
 
   def __init__(self, *definitions: TensorUse):
     self.definitions = definitions
+    self.expressions = []
 
-  def __iadd__(self, rhs: TensorUse):
-    pass
+  def __ilshift__(self, rhs):
+    # TODO: FIX ME.
+    assert not self.expressions, "Comprehension already populated"
+    # Tupleize.
+    if not isinstance(rhs, (tuple, list)):
+      rhs = (rhs,)
+    if len(self.definitions) != len(rhs):
+      raise ValueError(f"Attempt to bind {len(rhs)} exprressiont to"
+                       f"{len(self.definitions)} defs.")
+    for cdef, cexpr in zip(self.definitions, rhs):
+      # If the expression is a reduction, it has an implied first arg of the
+      # current definition.
+      if isinstance(cexpr, PrimApply) and cexpr.is_reduction:
+        cexpr.args = (cdef,) + cexpr.args
+      self.expressions.append(cexpr)
 
   def __repr__(self):
     if len(self.definitions) > 1:
       defs_repr = f"({', '.join(repr(d) for d in self.definitions)})"
-    else:
+    elif self.definitions:
       defs_repr = f"{repr(self.definitions[0])}"
-    return defs_repr
+    else:
+      return "()"
+
+    if len(self.expressions) > 1:
+      exprs_repr = f"({', '.join(repr(e) for e in self.expressions)})"
+    elif self.expressions:
+      exprs_repr = f"{repr(self.expressions[0])}"
+    else:
+      exprs_repr = "()"
+
+    return f"{defs_repr} = {exprs_repr}"
+
+
+class Prim:
+  """Primitive operations."""
+
+  def __init__(self, prim_name: str):
+    self.prim_name = prim_name
+
+  def __getitem__(self, dims: AffineExprDef) -> "PrimReduce":
+    if not isinstance(dims, tuple):
+      dims = (dims,)
+    return PrimReduce(self, dims)
+
+  def __call__(self, *args):
+    return PrimApply(self, args)
+
+  def __repr__(self):
+    return f"{self.prim_name}"
+
+
+Prim.add = Prim("add")
+Prim.mul = Prim("mul")
+
+
+class PrimReduce:
+  """A reducing primitive."""
+
+  def __init__(self, prim: Prim, dims: Tuple[AffineExprDef]):
+    self.prim = prim
+    self.dims = dims
+
+  def __call__(self, *args: List[Expression]) -> "PrimApply":
+    return PrimApply(self, args)
+
+  def __repr__(self):
+    return f"{self.prim.prim_name}[{', '.join(repr(d) for d in self.dims)}]"
+
+
+class PrimApply(Expression):
+  """Application of a primitive."""
+
+  def __init__(self, prim: Union[Prim, PrimReduce], args: List[Expression]):
+    self.prim = prim
+    self.args = args
+
+  @property
+  def is_reduction(self):
+    return isinstance(self.prim, PrimReduce)
+
+  def __repr__(self):
+    return f"{repr(self.prim)}({', '.join(repr(a) for a in self.args)})"
+
 
 class TcOpDef:
   """Definition of a named op.
