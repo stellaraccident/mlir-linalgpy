@@ -41,10 +41,58 @@ SymbolPosMap = Dict[str, int]
 class AffineBuildState:
   """Internal state for the AffineExprDef._create impls."""
 
-  def __init__(self):
-    # Map of symbolic name to position.
+  def __init__(self,
+               *,
+               global_state: "AffineBuildState" = None,
+               allow_new_symbols: bool = True,
+               allow_new_dims: bool = True):
+    if not global_state:
+      self.all_symbols = dict()  # type: Dict[str, int]
+      self.all_dims = dict()  # type: Dict[str, int]
+    else:
+      # Alias the global dict.
+      self.all_symbols = global_state.all_symbols
+      self.all_dims = global_state.all_dims
+
+    # Map of symbols and dims in the current build.
     self.symbol_pos_map = dict()  # type: Dict[str, int]
     self.dim_pos_map = dict()  # type: Dict[str, int]
+    self.allow_new_symbols = allow_new_symbols
+    self.allow_new_dims = allow_new_dims
+
+  def get_dim(self, dimname: str) -> int:
+    """Gets the dim position given a name."""
+    pos = self.all_dims.get(dimname)
+    if pos is None:
+      if not self.allow_new_dims:
+        raise ValueError(
+            f"New dimensions not allowed in the current affine expression: "
+            f"Requested '{dimname}', Availble: {self.all_dims}")
+      pos = len(self.all_dims)
+      self.all_dims[dimname] = pos
+    self.dim_pos_map[dimname] = pos
+    return pos
+
+  def get_symbol(self, symname: str) -> int:
+    """Geta a symbol position given a name."""
+    pos = self.all_symbols.get(symname)
+    if pos is None:
+      if not self.allow_new_symbols:
+        raise ValueError(
+            f"New symbols not allowed in the current affine expression: "
+            f"Requested '{symname}', Availble: {self.all_symbols}")
+      pos = len(self.all_symbols)
+      self.all_symbols[symname] = pos
+    self.symbol_pos_map[symname] = pos
+    return pos
+
+  @property
+  def dim_count(self):
+    return len(self.dim_pos_map)
+
+  @property
+  def symbol_count(self):
+    return len(self.symbol_pos_map)
 
   def __repr__(self):
     lines = [f"AffineBuildState<"]
@@ -137,10 +185,7 @@ class DimDef(AffineExprDef):
     return f"Dim({self.dimname})"
 
   def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
-    pos = state.dim_pos_map.get(self.dimname)
-    if pos is None:
-      pos = len(state.dim_pos_map)
-      state.dim_pos_map[self.dimname] = pos
+    pos = state.get_dim(self.dimname)
     return _ir.AffineDimExpr.get(position=pos)
 
   @classmethod
@@ -192,10 +237,7 @@ class SymbolDef(AffineExprDef):
     return f"Symbol({self.symname})"
 
   def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
-    pos = state.symbol_pos_map.get(self.symname)
-    if pos is None:
-      pos = len(state.symbol_pos_map)
-      state.symbol_pos_map[self.symname] = pos
+    pos = state.get_symbol(self.symname)
     return _ir.AffineSymbolExpr.get(position=pos)
 
   @classmethod
