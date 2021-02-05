@@ -71,7 +71,7 @@ class TensorDef:
       if not isinstance(expr_def, AffineExprDef):
         raise KeyError(
             "A TensorDef can only be subscripted by a tuple of affine dims")
-      exprs.append(expr_def.build(state=state))
+      exprs.append(expr_def)
     # indexing_map = _ir.AffineMap.get(dim_count=state.dim_count,
     #                                  symbol_count=state.symbol_count,
     #                                  exprs=exprs)
@@ -186,21 +186,13 @@ class TcOpDef:
     self.comprehensions = list()  # type: List[Comprehension]
     self._affine_state = AffineBuildState()
 
-  def add_tensor(self, **regs: TensorDef):
-    """Registers a tensor.
-      >>> od = TcOpDef('foobar')
-      >>> A = od.add_tensor(A=TensorDef('f32'))
-      >>> od.tensor('A')
-      A:TensorDef(type_pred=f32, shape=None)
-
-    """
-    for tensor_name, tensor in regs.items():
-      if tensor_name in self.registered_tensors:
-        raise ValueError(f"Tensor {tensor_name} is already registered "
-                         f"to {self.registered_tensors['tensor_name']}")
-      tensor.attach(len(self.registered_tensors), tensor_name, self)
-      self.registered_tensors[tensor_name] = tensor
-    return list(regs.values())
+  def add_tensor(self, tensor_name: str, tensor: TensorDef):
+    """Registers a tensor."""
+    if tensor_name in self.registered_tensors:
+      raise ValueError(f"Tensor {tensor_name} is already registered "
+                        f"to {self.registered_tensors['tensor_name']}")
+    tensor.attach(len(self.registered_tensors), tensor_name, self)
+    self.registered_tensors[tensor_name] = tensor
 
   def tensor(self, name):
     """Gets a registered tensor by name."""
