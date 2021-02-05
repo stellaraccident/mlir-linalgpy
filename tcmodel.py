@@ -39,7 +39,7 @@ class TensorDef:
 
   def __init__(self,
                type_pred: TypePredicate,
-               shape: Optional[ShapeCoercable] = None,
+               *shape: ShapeCoercable,
                indexing_map: Optional[_ir.AffineMap] = None,
                output: bool = False):
     self.owner = None
