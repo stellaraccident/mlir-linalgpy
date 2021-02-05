@@ -31,7 +31,7 @@ class TensorUse(Expression):
     return n
 
   def __repr__(self):
-    return f"{self.tensor_name}[{self.indices}]"
+    return f"{self.tensor_name}[{', '.join([repr(i) for i in self.indices])}]"
 
 
 class TensorDef:
