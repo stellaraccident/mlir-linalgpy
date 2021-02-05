@@ -18,14 +18,20 @@ class Expression:
 
 
 class TensorUse(Expression):
-  """A used tensor represented by its (tensor_name, indexing_map)."""
+  """A used tensor represented by its (tensor_name, indices)."""
 
-  def __init__(self, tensor_name: str, indexing_map: _ir.AffineMap):
-    self.tensor_name = tensor_name
-    self.indexing_map = indexing_map
+  def __init__(self, tensor_def: "TensorDef", indices: Sequence[AffineExprDef]):
+    self.tensor_def = tensor_def
+    self.indices = indices
+
+  @property
+  def tensor_name(self) -> str:
+    n = self.tensor_def.tensor_name
+    assert n is not None, "TensorDef not attached"
+    return n
 
   def __repr__(self):
-    return f"{self.tensor_name}[{self.indexing_map}]"
+    return f"{self.tensor_name}[{self.indices}]"
 
 
 class TensorDef:
@@ -36,7 +42,7 @@ class TensorDef:
                shape: Optional[ShapeCoercable] = None,
                indexing_map: Optional[_ir.AffineMap] = None,
                output: bool = False):
-    self._owner = None
+    self.owner = None
     self.type_pred = type_pred
     self.shape = shape
     self.indexing_map = indexing_map
@@ -45,18 +51,18 @@ class TensorDef:
     self.registered_index = None  # Optional[int]
 
   def attach(self, index: int, tensor_name: str, owner: "TcOpDef"):
-    if self._owner:
+    if self.owner:
       raise ValueError(f"TensorDef already registered with op: {self}")
     self.registered_index = index
     self.tensor_name = tensor_name
-    self._owner = owner
+    self.owner = owner
 
     # And do fixups that can only be done once attached.
-    if self.shape:
-      self.shape = self._owner._coerce_to_shape(self.shape)
+    # if self.shape:
+    #   self.shape = self.owner._coerce_to_shape(self.shape)
 
   def __getitem__(self, dims) -> TensorUse:
-    state = AffineBuildState(global_state=self._owner._affine_state,
+    state = AffineBuildState(global_state=self.owner._affine_state,
                              allow_new_symbols=False)
     if not isinstance(dims, tuple):
       dims = (dims,)  # Handle single subscript case.
@@ -66,10 +72,20 @@ class TensorDef:
         raise KeyError(
             "A TensorDef can only be subscripted by a tuple of affine dims")
       exprs.append(expr_def.build(state=state))
-    indexing_map = _ir.AffineMap.get(dim_count=state.dim_count,
-                                     symbol_count=state.symbol_count,
-                                     exprs=exprs)
-    return TensorUse(self.tensor_name, indexing_map)
+    # indexing_map = _ir.AffineMap.get(dim_count=state.dim_count,
+    #                                  symbol_count=state.symbol_count,
+    #                                  exprs=exprs)
+    return TensorUse(self, exprs)
+
+  def __setitem__(self, dims, value):
+    """Creates a new 1:1 comprehension by binding this tensor to an expression.
+    """
+    if not isinstance(value, Expression):
+      raise ValueError(f"Only Expressions can be assigned to TensorDefs. "
+                       f"Got: {repr(value)}")
+    use = self[dims]
+    comp = Comprehension((use, value))
+    self.owner.comprehensions.append(comp)
 
   def __repr__(self):
     output = "OUTPUT " if self.output else ""
@@ -80,42 +96,19 @@ class TensorDef:
 class Comprehension:
   """Represents a single comprehension."""
 
-  def __init__(self, *definitions: TensorUse):
-    self.definitions = definitions
-    self.expressions = []
-
-  def __ilshift__(self, rhs):
-    # TODO: FIX ME.
-    assert not self.expressions, "Comprehension already populated"
-    # Tupleize.
-    if not isinstance(rhs, (tuple, list)):
-      rhs = (rhs,)
-    if len(self.definitions) != len(rhs):
-      raise ValueError(f"Attempt to bind {len(rhs)} exprressiont to"
-                       f"{len(self.definitions)} defs.")
-    for cdef, cexpr in zip(self.definitions, rhs):
-      # If the expression is a reduction, it has an implied first arg of the
-      # current definition.
-      if isinstance(cexpr, PrimApply) and cexpr.is_reduction:
-        cexpr.args = (cdef,) + cexpr.args
-      self.expressions.append(cexpr)
+  def __init__(self, *bindings: Tuple[TensorUse, Expression]):
+    self.definitions = [d for d, _ in bindings]
+    self.values = [v for _, v in bindings]
 
   def __repr__(self):
     if len(self.definitions) > 1:
       defs_repr = f"({', '.join(repr(d) for d in self.definitions)})"
-    elif self.definitions:
+      values_repr = f"({', '.join(repr(v) for v in self.values)})"
+    else:
       defs_repr = f"{repr(self.definitions[0])}"
-    else:
-      return "()"
+      values_repr = f"{repr(self.values[0])}"
 
-    if len(self.expressions) > 1:
-      exprs_repr = f"({', '.join(repr(e) for e in self.expressions)})"
-    elif self.expressions:
-      exprs_repr = f"{repr(self.expressions[0])}"
-    else:
-      exprs_repr = "()"
-
-    return f"{defs_repr} = {exprs_repr}"
+    return f"{defs_repr} = {values_repr}"
 
 
 class Prim:
@@ -215,11 +208,6 @@ class TcOpDef:
       return self.registered_tensors[name]
     except KeyError:
       raise KeyError(f"Tensor {name} is not registered")
-
-  def add_comprehension(self, *definitions: TensorUse):
-    c = Comprehension(*definitions)
-    self.comprehensions.append(c)
-    return c
 
   def _coerce_to_shape(self, shape_spec: ShapeCoercable) -> _ir.AffineMap:
     state = AffineBuildState(global_state=self._affine_state,
