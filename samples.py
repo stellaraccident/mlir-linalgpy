@@ -11,14 +11,17 @@ def matmul(A: TensorDef('f32', S.M, S.K), B: TensorDef('f32', S.M, S.N),
 
 @tc_def_op
 def conv_1d(I: TensorDef('f32', S.W), K: TensorDef('f32', S.KW),
-            O: TensorDef('f32', S.W)):
+            O: TensorDef('f32', S.W, output=True)):
   O[D.w] = Prim.add[D.kw](Prim.mul(I[D.w + D.kw], K[D.kw]))
 
 
 @tc_def_op
-def batch_matmul(A: TensorDef('f32', S.Batch, S.M,
-                              S.K), B: TensorDef('f32', S.K, S.N),
-                 C: TensorDef('f32', S.Batch, S.M, S.N)):
+def batch_matmul(A: TensorDef('f32', S.Batch, S.M, S.K),
+                 B: TensorDef('f32', S.K, S.N), C: TensorDef('f32',
+                                                             S.Batch,
+                                                             S.M,
+                                                             S.N,
+                                                             output=True)):
   C[D.b, D.m, D.n] = Prim.add[D.k](Prim.mul(A[D.b, D.m, D.k], B[D.k, D.n]))
 
 
