@@ -21,7 +21,7 @@ Affine expression construction:
     dims={'i': 0, 'j': 1}>
 """
 
-from typing import Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 from mlir import ir as _ir
 
@@ -121,6 +121,10 @@ class AffineExprDef:
     assert isinstance(py_value, AffineExprDef)
     return py_value
 
+  def visit_affine_exprs(self, callback):
+    """Visits all AffineExprDefs including self."""
+    callback(self)
+
   def __add__(lhs, rhs):
     rhs = AffineExprDef.coerce_from(rhs)
     return AffineBinaryExprDef(_ir.AffineAddExpr, lhs, rhs)
@@ -164,6 +168,15 @@ class AffineBinaryExprDef(AffineExprDef):
 
   def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     return self.ir_ctor.get(self.lhs._create(state), self.rhs._create(state))
+
+  def visit_affine_exprs(self, callback):
+    """Visits all AffineExprDefs including self."""
+    super().visit_affine_exprs(callback)
+    self.lhs.visit_affine_exprs(callback)
+    self.rhs.visit_affine_exprs(callback)
+
+  def __repr__(self):
+    return f"{self.ir_ctor.__name__}({repr(self.lhs)}, {repr(self.rhs)})"
 
 
 class DimDef(AffineExprDef):

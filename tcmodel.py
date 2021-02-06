@@ -1,34 +1,83 @@
 """Model classes representing a tensor-comprehension."""
 
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from mlir import ir as _ir
 
 from affinedsl import *
+from tctypes import *
 
 # Type aliases.
 AffineDimList = Dict[str, _ir.AffineExpr]
 ShapeCoercable = Optional[Union[_ir.AffineMap, Sequence[AffineExprDef]]]
-TypePredicate = Union[str, _ir.Type]
 
 
 class Expression:
   """An expression that can appear on the RHS of a comprehension."""
-  pass
+
+  def visit_affine_exprs(self, callback):
+    """Visits all affine expressions reachable by the expression."""
+    pass
+
+  def _get_all_dim_defs(self) -> Set[DimDef]:
+    """Recursively gets all DimDef affine expressions that are referenced."""
+    results = set()
+
+    def visitor(affine_expr):
+      if isinstance(affine_expr, DimDef):
+        results.add(affine_expr)
+
+    self.visit_affine_exprs(visitor)
+    return results
+
+  def __add__(self, rhs) -> "Expression":
+    return Prim.add(self, rhs)
+
+  def __mul__(self, rhs) -> "Expression":
+    return Prim.mul(self, rhs)
+
+  def __sub__(self, rhs) -> "Expression":
+    return Prim.sub(self, rhs)
 
 
 class TensorUse(Expression):
-  """A used tensor represented by its (tensor_name, indices)."""
+  """A used tensor represented by its (tensor_name, indices).
+
+  Note that forming a comprehension via direct assignment is performed through
+  __setitem__ on the TensorDef level. However, performing a reduction with
+  compound ops (+=, *=, etc) is done by doing a:
+    TensorDef.__getitem__
+    TensorUse.__iadd__
+    TensorDef.__setitem__
+  """
 
   def __init__(self, tensor_def: "TensorDef", indices: Sequence[AffineExprDef]):
     self.tensor_def = tensor_def
-    self.indices = indices
+    self.indices = tuple(indices)
 
   @property
   def tensor_name(self) -> str:
     n = self.tensor_def.tensor_name
     assert n is not None, "TensorDef not attached"
     return n
+
+  def visit_affine_exprs(self, callback):
+    for ind in self.indices:
+      ind.visit_affine_exprs(callback)
+
+  def __iadd__(self, rhs: Expression) -> Expression:
+    return Reduce.add(*self._compute_reduce_dims(rhs))(rhs)
+
+  def _compute_reduce_dims(self, rhs: Expression) -> Set[DimDef]:
+    """For implicit reductions, computes default reduction dims.
+
+    Assumes that the rhs is the expression being reduced and self is being
+    reduced into. Any indices referenced on the rhs and not in self are
+    considered reduction dims and will be ordered as encountered on the rhs.
+    """
+    rhs_dims = rhs._get_all_dim_defs()
+    lhs_dims = self._get_all_dim_defs()
+    return rhs_dims - lhs_dims
 
   def __repr__(self):
     return f"{self.tensor_name}[{', '.join([repr(i) for i in self.indices])}]"
@@ -38,12 +87,14 @@ class TensorDef:
   """Bookkeeping of a single registered tensor, held in dict by name."""
 
   def __init__(self,
-               type_pred: TypePredicate,
+               type_var: TypeVar,
                *shape: ShapeCoercable,
                indexing_map: Optional[_ir.AffineMap] = None,
                output: bool = False):
+    if not isinstance(type_var, TypeVar):
+      raise ValueError(f"TensorDef requires a TypeVar. Got: {repr(type_var)}")
     self.owner = None
-    self.type_pred = type_pred
+    self.type_var = type_var
     self.shape = shape
     self.indexing_map = indexing_map
     self.output = output
@@ -79,6 +130,9 @@ class TensorDef:
 
   def __setitem__(self, dims, value):
     """Creates a new 1:1 comprehension by binding this tensor to an expression.
+
+    Note that due to the way assignment works in Python, we have to capture
+    direct assignment as a setitem on the TensorDef.
     """
     if not isinstance(value, Expression):
       raise ValueError(f"Only Expressions can be assigned to TensorDefs. "
@@ -89,7 +143,7 @@ class TensorDef:
 
   def __repr__(self):
     output = "OUTPUT " if self.output else ""
-    return (f"{self.tensor_name}:TensorDef({output}type_pred={self.type_pred}, "
+    return (f"{self.tensor_name}:TensorDef({output}{repr(self.type_var)}, "
             f"shape={self.shape})")
 
 
@@ -117,49 +171,79 @@ class Prim:
   def __init__(self, prim_name: str):
     self.prim_name = prim_name
 
-  def __getitem__(self, dims: AffineExprDef) -> "PrimReduce":
-    if not isinstance(dims, tuple):
-      dims = (dims,)
-    return PrimReduce(self, dims)
-
   def __call__(self, *args):
     return PrimApply(self, args)
+
+  def reduce(self, *reduce_dims: AffineExprDef):
+    """Shortcut to create a Reduce operation from this primitive."""
+    return Reduce(self, *reduce_dims)
 
   def __repr__(self):
     return f"{self.prim_name}"
 
 
-Prim.add = Prim("add")
-Prim.mul = Prim("mul")
+class Reduce:
+  """A reduction operator that reduces into its LHS from its RHS."""
 
+  def __init__(self, operator: Prim, *reduce_dims: AffineExprDef):
+    if not isinstance(operator, Prim):
+      raise ValueError(f"Reduce expected a Prim operator. Got: {operator}")
+    self.operator = operator
+    self.reduce_dims = tuple(reduce_dims)
 
-class PrimReduce:
-  """A reducing primitive."""
-
-  def __init__(self, prim: Prim, dims: Tuple[AffineExprDef]):
-    self.prim = prim
-    self.dims = dims
-
-  def __call__(self, *args: List[Expression]) -> "PrimApply":
-    return PrimApply(self, args)
+  def __call__(self, *args: Expression):
+    return ReduceApply(self, args)
 
   def __repr__(self):
-    return f"{self.prim.prim_name}[{', '.join(repr(d) for d in self.dims)}]"
+    return (f"reduce_{self.operator.prim_name}"
+            f"({', '.join(repr(d) for d in self.reduce_dims)})")
 
+
+# Built-in primitives and reductions.
+Prim.add = Prim("add")
+Reduce.add = Prim.add.reduce
+Prim.exp = Prim("exp")
+Prim.log = Prim("log")
+Prim.mul = Prim("mul")
+Reduce.mul = Prim.mul.reduce
+Prim.max = Prim("max")
+Reduce.max = Prim.max.reduce
+Prim.sub = Prim("sub")
 
 class PrimApply(Expression):
   """Application of a primitive."""
 
-  def __init__(self, prim: Union[Prim, PrimReduce], args: List[Expression]):
+  def __init__(self, prim: Prim, args: Expression):
     self.prim = prim
-    self.args = args
+    self.args = tuple(args)
 
-  @property
-  def is_reduction(self):
-    return isinstance(self.prim, PrimReduce)
+  def visit_affine_exprs(self, callback):
+    for arg in self.args:
+      arg.visit_affine_exprs(callback)
 
   def __repr__(self):
     return f"{repr(self.prim)}({', '.join(repr(a) for a in self.args)})"
+
+
+class ReduceApply(Expression):
+  """Application of a reduction.
+
+  Note that this only captures the reduction indices and the right hand side.
+  It is assumed that it is applied to a LHS external to the expression.
+  """
+
+  def __init__(self, reduce: Reduce, args: Sequence[Expression]):
+    self.reduce = reduce
+    self.args = tuple(args)
+
+  def visit_affine_exprs(self, callback):
+    for ind in self.reduce.reduce_dims:
+      ind.visit_affine_exprs(callback)
+    for arg in self.args:
+      arg.visit_affine_exprs(callback)
+
+  def __repr__(self):
+    return f"{repr(self.reduce)}({', '.join(repr(a) for a in self.args)})"
 
 
 class TcOpDef:
@@ -181,7 +265,7 @@ class TcOpDef:
 
   def __init__(self, name: str, cpp_op_name: str = None):
     self.name = name
-    self.cpp_op_name = f"{cpp_op_name}Op" if cpp_op_name is not None else name
+    self.cpp_op_name = cpp_op_name if cpp_op_name is not None else name
     self.registered_tensors = dict()  # type: Dict[str, TensorDef]
     self.comprehensions = list()  # type: List[Comprehension]
     self._affine_state = AffineBuildState()
@@ -190,7 +274,7 @@ class TcOpDef:
     """Registers a tensor."""
     if tensor_name in self.registered_tensors:
       raise ValueError(f"Tensor {tensor_name} is already registered "
-                        f"to {self.registered_tensors['tensor_name']}")
+                       f"to {self.registered_tensors['tensor_name']}")
     tensor.attach(len(self.registered_tensors), tensor_name, self)
     self.registered_tensors[tensor_name] = tensor
 
