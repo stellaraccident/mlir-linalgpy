@@ -48,7 +48,7 @@ from tcdsl import *
 @tc_def_op
 def matmul_poly(A: TensorDef(T, S.M, S.K), B: TensorDef(T, S.M, S.N),
                 C: TensorDef(U, S.M, S.N, output=True)):
-  C[D.m, D.n] = Reduce.add(D.k)(A[D.m, D.k] * B[D.k, D.n])
+  C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
 
 print(matmul_poly.tc_model)
