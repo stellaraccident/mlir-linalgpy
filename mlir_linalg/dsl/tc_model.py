@@ -4,8 +4,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from mlir import ir as _ir
 
-from affinedsl import *
-from tctypes import *
+from .affine import *
+from .types import *
 
 # Type aliases.
 AffineDimList = Dict[str, _ir.AffineExpr]

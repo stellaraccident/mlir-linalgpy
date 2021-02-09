@@ -6,7 +6,7 @@ import inspect
 import threading
 
 from mlir import ir
-from tcmodel import *
+from .tc_model import *
 
 _CONTEXT = threading.local()
 

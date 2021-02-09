@@ -41,9 +41,7 @@ TcOpDef(log_matmul_exp -> LogMatmulExpOp,
 
 """
 
-from mlir.ir import *
-from tcmodel import *
-from tcdsl import *
+from mlir_linalg.dsl.tc import *
 
 @tc_def_op
 def matmul_poly(A: TensorDef(T, S.M, S.K), B: TensorDef(T, S.M, S.N),
