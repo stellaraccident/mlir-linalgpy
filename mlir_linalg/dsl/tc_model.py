@@ -9,7 +9,7 @@ from .types import *
 
 # Type aliases.
 AffineDimList = Dict[str, _ir.AffineExpr]
-ShapeCoercable = Optional[Union[_ir.AffineMap, Sequence[AffineExprDef]]]
+ShapeCoercable = Sequence[AffineExprDef]
 
 
 class Expression:
@@ -30,14 +30,14 @@ class Expression:
     self.visit_affine_exprs(visitor)
     return results
 
-  def __add__(self, rhs) -> "Expression":
-    return Prim.add(self, rhs)
+  def __add__(self, rhs: "Expression") -> "Expression":
+    return PrimFn.add(self, rhs)
 
   def __mul__(self, rhs) -> "Expression":
-    return Prim.mul(self, rhs)
+    return PrimFn.mul(self, rhs)
 
   def __sub__(self, rhs) -> "Expression":
-    return Prim.sub(self, rhs)
+    return PrimFn.sub(self, rhs)
 
 
 class TensorUse(Expression):
@@ -66,7 +66,7 @@ class TensorUse(Expression):
       ind.visit_affine_exprs(callback)
 
   def __iadd__(self, rhs: Expression) -> Expression:
-    return Reduce.add(*self._compute_reduce_dims(rhs))(rhs)
+    return ReduceFn.add(*self._compute_reduce_dims(rhs))(rhs)
 
   def _compute_reduce_dims(self, rhs: Expression) -> Set[DimDef]:
     """For implicit reductions, computes default reduction dims.
@@ -93,13 +93,13 @@ class TensorDef:
                output: bool = False):
     if not isinstance(type_var, TypeVar):
       raise ValueError(f"TensorDef requires a TypeVar. Got: {repr(type_var)}")
-    self.owner = None
+    self.owner = None  # type: Optional["TcOpDef"]
     self.type_var = type_var
     self.shape = shape
     self.indexing_map = indexing_map
     self.output = output
-    self.tensor_name = None
-    self.registered_index = None  # Optional[int]
+    self.tensor_name = None  # type: Optional[str]
+    self.registered_index = None  # type: Optional[int]
 
   def attach(self, index: int, tensor_name: str, owner: "TcOpDef"):
     if self.owner:
@@ -113,6 +113,7 @@ class TensorDef:
     #   self.shape = self.owner._coerce_to_shape(self.shape)
 
   def __getitem__(self, dims) -> TensorUse:
+    assert self.owner, "TensorDef is not attached to an op"
     state = AffineBuildState(global_state=self.owner._affine_state,
                              allow_new_symbols=False)
     if not isinstance(dims, tuple):
@@ -165,7 +166,7 @@ class Comprehension:
     return f"{defs_repr} = {values_repr}"
 
 
-class Prim:
+class PrimFnType:
   """Primitive operations."""
 
   def __init__(self, prim_name: str):
@@ -176,17 +177,26 @@ class Prim:
 
   def reduce(self, *reduce_dims: AffineExprDef):
     """Shortcut to create a Reduce operation from this primitive."""
-    return Reduce(self, *reduce_dims)
+    return ReduceFnType(self, *reduce_dims)
 
   def __repr__(self):
     return f"{self.prim_name}"
 
 
-class Reduce:
+class PrimFn:
+  add = PrimFnType("add")
+  exp = PrimFnType("exp")
+  log = PrimFnType("log")
+  mul = PrimFnType("mul")
+  max = PrimFnType("max")
+  sub = PrimFnType("sub")
+
+
+class ReduceFnType:
   """A reduction operator that reduces into its LHS from its RHS."""
 
-  def __init__(self, operator: Prim, *reduce_dims: AffineExprDef):
-    if not isinstance(operator, Prim):
+  def __init__(self, operator: PrimFnType, *reduce_dims: AffineExprDef):
+    if not isinstance(operator, PrimFnType):
       raise ValueError(f"Reduce expected a Prim operator. Got: {operator}")
     self.operator = operator
     self.reduce_dims = tuple(reduce_dims)
@@ -199,21 +209,16 @@ class Reduce:
             f"({', '.join(repr(d) for d in self.reduce_dims)})")
 
 
-# Built-in primitives and reductions.
-Prim.add = Prim("add")
-Reduce.add = Prim.add.reduce
-Prim.exp = Prim("exp")
-Prim.log = Prim("log")
-Prim.mul = Prim("mul")
-Reduce.mul = Prim.mul.reduce
-Prim.max = Prim("max")
-Reduce.max = Prim.max.reduce
-Prim.sub = Prim("sub")
+class ReduceFn:
+  add = PrimFn.add.reduce
+  mul = PrimFn.mul.reduce
+  max = PrimFn.max.reduce
+
 
 class PrimApply(Expression):
   """Application of a primitive."""
 
-  def __init__(self, prim: Prim, args: Expression):
+  def __init__(self, prim: PrimFnType, args: Sequence[Expression]):
     self.prim = prim
     self.args = tuple(args)
 
@@ -232,7 +237,7 @@ class ReduceApply(Expression):
   It is assumed that it is applied to a LHS external to the expression.
   """
 
-  def __init__(self, reduce: Reduce, args: Sequence[Expression]):
+  def __init__(self, reduce: ReduceFnType, args: Sequence[Expression]):
     self.reduce = reduce
     self.args = tuple(args)
 

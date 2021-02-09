@@ -93,9 +93,9 @@ def log_matmul_exp(
     TmpShift=TensorDef(T, S.M, S.N),  # TODO: Mark temp
     Tmp=TensorDef(T, S.M, S.N)):  # TODO: Mark temp
   Interim[D.k, D.m, D.n] = A[D.m, D.k] + B[D.k, D.n]
-  TmpShift[D.m, D.n] = Reduce.max(D.k)(Interim[D.k, D.m, D.n])
-  Tmp[D.m, D.n] += Prim.exp(Interim[D.k, D.m, D.n] - TmpShift[D.m, D.n])
-  C[D.m, D.n] = Prim.log(Tmp[D.m, D.n]) + TmpShift[D.m, D.n]
+  TmpShift[D.m, D.n] = ReduceFn.max(D.k)(Interim[D.k, D.m, D.n])
+  Tmp[D.m, D.n] += PrimFn.exp(Interim[D.k, D.m, D.n] - TmpShift[D.m, D.n])
+  C[D.m, D.n] = PrimFn.log(Tmp[D.m, D.n]) + TmpShift[D.m, D.n]
 
 
 print(log_matmul_exp.tc_model)
