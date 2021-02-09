@@ -43,9 +43,11 @@ TcOpDef(log_matmul_exp -> LogMatmulExpOp,
 
 from mlir_linalg.dsl.tc import *
 
+
 @tc_def_op
-def matmul_poly(A: TensorDef(T, S.M, S.K), B: TensorDef(T, S.M, S.N),
-                C: TensorDef(U, S.M, S.N, output=True)):
+def matmul_poly(A=TensorDef(T, S.M, S.K),
+                B=TensorDef(T, S.M, S.N),
+                C=TensorDef(U, S.M, S.N, output=True)):
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
 
@@ -53,8 +55,9 @@ print(matmul_poly.tc_model)
 
 
 @tc_def_op
-def matmul(A: TensorDef(T, S.M, S.K), B: TensorDef(T, S.M, S.N),
-           C: TensorDef(T, S.M, S.N, output=True)):
+def matmul(A=TensorDef(T, S.M, S.K),
+           B=TensorDef(T, S.M, S.N),
+           C=TensorDef(T, S.M, S.N, output=True)):
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
 
@@ -62,8 +65,9 @@ print(matmul.tc_model)
 
 
 @tc_def_op
-def conv_1d(I: TensorDef(T, S.W), K: TensorDef(T, S.KW),
-            O: TensorDef(T, S.W, output=True)):
+def conv_1d(I=TensorDef(T, S.W),
+            K=TensorDef(T, S.KW),
+            O=TensorDef(T, S.W, output=True)):
   O[D.w] += I[D.w + D.kw] * K[D.kw]
 
 
@@ -71,8 +75,9 @@ print(conv_1d.tc_model)
 
 
 @tc_def_op
-def batch_matmul(A: TensorDef(T, S.Batch, S.M, S.K), B: TensorDef(T, S.K, S.N),
-                 C: TensorDef(T, S.Batch, S.M, S.N, output=True)):
+def batch_matmul(A=TensorDef(T, S.Batch, S.M, S.K),
+                 B=TensorDef(T, S.K, S.N),
+                 C=TensorDef(T, S.Batch, S.M, S.N, output=True)):
   C[D.b, D.m, D.n] += A[D.b, D.m, D.k] * B[D.k, D.n]
 
 
@@ -81,12 +86,12 @@ print(batch_matmul.tc_model)
 
 @tc_def_op
 def log_matmul_exp(
-    A: TensorDef(T, S.M, S.K),
-    B: TensorDef(T, S.K, S.N),
-    C: TensorDef(T, S.M, S.N, output=True),
-    Interim: TensorDef(T, S.K, S.M, S.N),  # TODO: Mark temp
-    TmpShift: TensorDef(T, S.M, S.N),  # TODO: Mark temp
-    Tmp: TensorDef(T, S.M, S.N)):  # TODO: Mark temp
+    A=TensorDef(T, S.M, S.K),
+    B=TensorDef(T, S.K, S.N),
+    C=TensorDef(T, S.M, S.N, output=True),
+    Interim=TensorDef(T, S.K, S.M, S.N),  # TODO: Mark temp
+    TmpShift=TensorDef(T, S.M, S.N),  # TODO: Mark temp
+    Tmp=TensorDef(T, S.M, S.N)):  # TODO: Mark temp
   Interim[D.k, D.m, D.n] = A[D.m, D.k] + B[D.k, D.n]
   TmpShift[D.m, D.n] = Reduce.max(D.k)(Interim[D.k, D.m, D.n])
   Tmp[D.m, D.n] += Prim.exp(Interim[D.k, D.m, D.n] - TmpShift[D.m, D.n])
