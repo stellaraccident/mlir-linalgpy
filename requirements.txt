@@ -1,3 +1,4 @@
+lit
 mypy
 numpy
 mlir-snapshot
