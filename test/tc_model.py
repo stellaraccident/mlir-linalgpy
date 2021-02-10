@@ -17,4 +17,4 @@ def matmul_poly(A=TensorDef(T, S.M, S.K),
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
 
-print(matmul_poly.tc_model)
+print(matmul_poly.model)

@@ -7,6 +7,7 @@ import threading
 
 from mlir import ir
 from .tc_model import *
+from ..ir_gen.emitter import *
 
 _CONTEXT = threading.local()
 
@@ -41,15 +42,5 @@ def tc_def_op(dsl_func=None, *, op_name=None, op_class_name=None):
   # TODO: Wrap in context manager.
   dsl_func(*dsl_func_args)
 
-  return TcDefinedOpCallable(op_name, tc_model)
+  return TcEmitGenericCallable(op_name, tc_model)
 
-
-class TcDefinedOpCallable:
-  """Callable that is generated via the @tc_def_op decorator."""
-
-  def __init__(self, name: str, tc_model: TcOpDef):
-    self.__name__ = name
-    self.tc_model = tc_model
-
-  def __call__(self, *args, **kwargs):
-    raise NotImplementedError("Not yet callable")

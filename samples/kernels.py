@@ -51,7 +51,7 @@ def matmul_poly(A=TensorDef(T, S.M, S.K),
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
 
-print(matmul_poly.tc_model)
+print(matmul_poly.model)
 
 
 @tc_def_op
@@ -61,7 +61,7 @@ def matmul(A=TensorDef(T, S.M, S.K),
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
 
-print(matmul.tc_model)
+print(matmul.model)
 
 
 @tc_def_op
@@ -71,7 +71,7 @@ def conv_1d(I=TensorDef(T, S.W),
   O[D.w] += I[D.w + D.kw] * K[D.kw]
 
 
-print(conv_1d.tc_model)
+print(conv_1d.model)
 
 
 @tc_def_op
@@ -81,7 +81,7 @@ def batch_matmul(A=TensorDef(T, S.Batch, S.M, S.K),
   C[D.b, D.m, D.n] += A[D.b, D.m, D.k] * B[D.k, D.n]
 
 
-print(batch_matmul.tc_model)
+print(batch_matmul.model)
 
 
 @tc_def_op
@@ -98,4 +98,4 @@ def log_matmul_exp(
   C[D.m, D.n] = PrimFn.log(Tmp[D.m, D.n]) + TmpShift[D.m, D.n]
 
 
-print(log_matmul_exp.tc_model)
+print(log_matmul_exp.model)

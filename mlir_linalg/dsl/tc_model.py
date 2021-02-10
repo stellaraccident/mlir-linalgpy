@@ -101,6 +101,11 @@ class TensorDef:
     self.tensor_name = None  # type: Optional[str]
     self.registered_index = None  # type: Optional[int]
 
+  @property
+  def rank(self) -> int:
+    """The rank of the tensor."""
+    return len(self.shape)
+
   def attach(self, index: int, tensor_name: str, owner: "TcOpDef"):
     if self.owner:
       raise ValueError(f"TensorDef already registered with op: {self}")
@@ -274,6 +279,14 @@ class TcOpDef:
     self.registered_tensors = dict()  # type: Dict[str, TensorDef]
     self.comprehensions = list()  # type: List[Comprehension]
     self._affine_state = AffineBuildState()
+
+  @property
+  def inputs(self) -> Sequence[TensorDef]:
+    return [t for t in self.registered_tensors.values() if not t.output]
+
+  @property
+  def outputs(self) -> Sequence[TensorDef]:
+    return [t for t in self.registered_tensors.values() if t.output]
 
   def add_tensor(self, tensor_name: str, tensor: TensorDef):
     """Registers a tensor."""
