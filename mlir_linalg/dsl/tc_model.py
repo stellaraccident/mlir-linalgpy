@@ -170,7 +170,7 @@ class Comprehension:
     self.values = [v for _, v in bindings]
 
   @property
-  def all_reduction_dims(self) -> Set[Tuple[DimDef]]:
+  def all_reduction_dims(self) -> Set[Tuple[DimDef, ...]]:
     """Gets the reduction dims for the comprehension or None."""
     result = set()
     for use in self.values:
@@ -200,7 +200,7 @@ class PrimFnType:
   def __call__(self, *args):
     return PrimApply(self, args)
 
-  def reduce(self, *reduce_dims: AffineExprDef):
+  def reduce(self, *reduce_dims: DimDef):
     """Shortcut to create a Reduce operation from this primitive."""
     return ReduceFnType(self, *reduce_dims)
 
