@@ -10,7 +10,7 @@ from mlir_linalg.dsl.tc import *
 
 @tc_def_op
 def matmul(A=TensorDef(T, S.M, S.K),
-           B=TensorDef(T, S.M, S.N),
+           B=TensorDef(T, S.K, S.N),
            C=TensorDef(T, S.M, S.N, output=True)):
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 

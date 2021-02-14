@@ -4,13 +4,13 @@ Currently outputs:
 
 TcOpDef(matmul_poly -> MatmulPolyOp,
   A:TensorDef(TypeVar(T), shape=(Symbol(M), Symbol(K)))
-  B:TensorDef(TypeVar(T), shape=(Symbol(M), Symbol(N)))
+  B:TensorDef(TypeVar(T), shape=(Symbol(K), Symbol(N)))
   C:TensorDef(OUTPUT TypeVar(U), shape=(Symbol(M), Symbol(N))) {
     C[Dim(m), Dim(n)] = reduce_add(Dim(k))(mul(A[Dim(m), Dim(k)], B[Dim(k), Dim(n)]))
 }
 TcOpDef(matmul -> MatmulOp,
   A:TensorDef(TypeVar(T), shape=(Symbol(M), Symbol(K)))
-  B:TensorDef(TypeVar(T), shape=(Symbol(M), Symbol(N)))
+  B:TensorDef(TypeVar(T), shape=(Symbol(K), Symbol(N)))
   C:TensorDef(OUTPUT TypeVar(T), shape=(Symbol(M), Symbol(N))) {
     C[Dim(m), Dim(n)] = reduce_add(Dim(k))(mul(A[Dim(m), Dim(k)], B[Dim(k), Dim(n)]))
 }
@@ -46,7 +46,7 @@ from mlir_linalg.dsl.tc import *
 
 @tc_def_op
 def matmul_poly(A=TensorDef(T, S.M, S.K),
-                B=TensorDef(T, S.M, S.N),
+                B=TensorDef(T, S.K, S.N),
                 C=TensorDef(U, S.M, S.N, output=True)):
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 
@@ -56,7 +56,7 @@ print(matmul_poly.model)
 
 @tc_def_op
 def matmul(A=TensorDef(T, S.M, S.K),
-           B=TensorDef(T, S.M, S.N),
+           B=TensorDef(T, S.K, S.N),
            C=TensorDef(T, S.M, S.N, output=True)):
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
 

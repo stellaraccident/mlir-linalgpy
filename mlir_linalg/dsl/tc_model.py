@@ -30,6 +30,10 @@ class Expression:
     self.visit_affine_exprs(visitor)
     return results
 
+  def collect_uses(self, uses: Set["TensorUse"]):
+    """Collects all TensorUses reachable through this expression."""
+    pass
+
   def __add__(self, rhs: "Expression") -> "Expression":
     return PrimFn.add(self, rhs)
 
@@ -38,6 +42,9 @@ class Expression:
 
   def __sub__(self, rhs) -> "Expression":
     return PrimFn.sub(self, rhs)
+
+  def __hash__(self):
+    return hash(id(self))
 
 
 class TensorUse(Expression):
@@ -64,6 +71,9 @@ class TensorUse(Expression):
   def visit_affine_exprs(self, callback):
     for ind in self.indices:
       ind.visit_affine_exprs(callback)
+
+  def collect_uses(self, uses: Set["TensorUse"]):
+    uses.add(self)
 
   def __iadd__(self, rhs: Expression) -> Expression:
     return ReduceFn.add(*self._compute_reduce_dims(rhs))(rhs)
@@ -113,10 +123,6 @@ class TensorDef:
     self.tensor_name = tensor_name
     self.owner = owner
 
-    # And do fixups that can only be done once attached.
-    # if self.shape:
-    #   self.shape = self.owner._coerce_to_shape(self.shape)
-
   def __getitem__(self, dims) -> TensorUse:
     assert self.owner, "TensorDef is not attached to an op"
     state = AffineBuildState(global_state=self.owner._affine_state,
@@ -147,6 +153,9 @@ class TensorDef:
     comp = Comprehension((use, value))
     self.owner.comprehensions.append(comp)
 
+  def __hash__(self):
+    return hash(id(self))
+
   def __repr__(self):
     output = "OUTPUT " if self.output else ""
     return (f"{self.tensor_name}:TensorDef({output}{repr(self.type_var)}, "
@@ -159,6 +168,17 @@ class Comprehension:
   def __init__(self, *bindings: Tuple[TensorUse, Expression]):
     self.definitions = [d for d, _ in bindings]
     self.values = [v for _, v in bindings]
+
+  @property
+  def all_reduction_dims(self) -> Set[Tuple[DimDef]]:
+    """Gets the reduction dims for the comprehension or None."""
+    result = set()
+    for use in self.values:
+      if isinstance(use, ReduceApply):
+        result.add(use.reduce.reduce_dims)
+      else:
+        result.add(tuple())
+    return result
 
   def __repr__(self):
     if len(self.definitions) > 1:
@@ -200,7 +220,8 @@ class PrimFn:
 class ReduceFnType:
   """A reduction operator that reduces into its LHS from its RHS."""
 
-  def __init__(self, operator: PrimFnType, *reduce_dims: AffineExprDef):
+  def __init__(self, operator: PrimFnType, *reduce_dims: DimDef):
+    """Initializes the ReduceFn with a primitive function and dims."""
     if not isinstance(operator, PrimFnType):
       raise ValueError(f"Reduce expected a Prim operator. Got: {operator}")
     self.operator = operator
@@ -231,6 +252,10 @@ class PrimApply(Expression):
     for arg in self.args:
       arg.visit_affine_exprs(callback)
 
+  def collect_uses(self, uses: Set["TensorUse"]):
+    for arg in self.args:
+      arg.collect_uses(uses)
+
   def __repr__(self):
     return f"{repr(self.prim)}({', '.join(repr(a) for a in self.args)})"
 
@@ -251,6 +276,10 @@ class ReduceApply(Expression):
       ind.visit_affine_exprs(callback)
     for arg in self.args:
       arg.visit_affine_exprs(callback)
+
+  def collect_uses(self, uses: Set["TensorUse"]):
+    for arg in self.args:
+      arg.collect_uses(uses)
 
   def __repr__(self):
     return f"{repr(self.reduce)}({', '.join(repr(a) for a in self.args)})"
@@ -302,23 +331,6 @@ class TcOpDef:
       return self.registered_tensors[name]
     except KeyError:
       raise KeyError(f"Tensor {name} is not registered")
-
-  def _coerce_to_shape(self, shape_spec: ShapeCoercable) -> _ir.AffineMap:
-    state = AffineBuildState(global_state=self._affine_state,
-                             allow_new_dims=False)
-    if isinstance(shape_spec, _ir.AffineMap):
-      return shape_spec
-    # Treat as a sequence of affine expressions.
-    exprs = []
-    for expr_def in shape_spec:
-      if not isinstance(expr_def, AffineExprDef):
-        raise ValueError(
-            f"Expected shape dim to be an AffineExprDef. Got {expr_def}")
-      exprs.append(expr_def.build(state=state))
-    assert state.dim_count == 0
-    return _ir.AffineMap.get(dim_count=0,
-                             symbol_count=state.symbol_count,
-                             exprs=exprs)
 
   def __repr__(self):
     lines = [f"TcOpDef({self.name} -> {self.cpp_op_name},"]

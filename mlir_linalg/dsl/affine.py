@@ -55,8 +55,8 @@ class AffineBuildState:
       self.all_dims = global_state.all_dims
 
     # Map of symbols and dims in the current build.
-    self.symbol_pos_map = dict()  # type: Dict[str, int]
-    self.dim_pos_map = dict()  # type: Dict[str, int]
+    self.local_symbols = dict()  # type: Dict[str, int]
+    self.local_dims = dict()  # type: Dict[str, int]
     self.allow_new_symbols = allow_new_symbols
     self.allow_new_dims = allow_new_dims
 
@@ -70,7 +70,7 @@ class AffineBuildState:
             f"Requested '{dimname}', Availble: {self.all_dims}")
       pos = len(self.all_dims)
       self.all_dims[dimname] = pos
-    self.dim_pos_map[dimname] = pos
+    self.local_dims[dimname] = pos
     return pos
 
   def get_symbol(self, symname: str) -> int:
@@ -83,21 +83,29 @@ class AffineBuildState:
             f"Requested '{symname}', Availble: {self.all_symbols}")
       pos = len(self.all_symbols)
       self.all_symbols[symname] = pos
-    self.symbol_pos_map[symname] = pos
+    self.local_symbols[symname] = pos
     return pos
 
   @property
-  def dim_count(self):
-    return len(self.dim_pos_map)
+  def local_dim_count(self) -> int:
+    return len(self.local_dims)
 
   @property
-  def symbol_count(self):
-    return len(self.symbol_pos_map)
+  def local_symbol_count(self) -> int:
+    return len(self.local_symbols)
+
+  @property
+  def dim_count(self) -> int:
+    return len(self.all_dims)
+
+  @property
+  def symbol_count(self) -> int:
+    return len(self.all_symbols)
 
   def __repr__(self):
     lines = [f"AffineBuildState<"]
-    lines.append(f"  symbols={self.symbol_pos_map}")
-    lines.append(f"  dims={self.dim_pos_map}>")
+    lines.append(f"  symbols={self.local_symbols}")
+    lines.append(f"  dims={self.local_dims}>")
     return "\n".join(lines)
 
 
@@ -156,6 +164,9 @@ class AffineConstantExpr(AffineExprDef):
 
   def _create(self, state: AffineBuildState) -> _ir.AffineExpr:
     return _ir.AffineConstantExpr.get(self.value)
+
+  def __repr__(self):
+    return f"Const({self.value})"
 
 
 class AffineBinaryExprDef(AffineExprDef):
