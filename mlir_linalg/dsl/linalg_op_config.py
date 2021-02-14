@@ -23,8 +23,10 @@ def from_tc_op_def(tc_op_def: TcOpDef,
   """Expands a TcOpDef into corresponding Linalg configured ops."""
   # TODO: Many TcOpDef patterns need to expand to multiple generics.
   assert len(tc_op_def.comprehensions) == 1, "Only one comprehension supported"
-  return LinalgGenericNamedOpConfig(tc_op_def.comprehensions[0],
-                                    tc_op_def.metadata, context)
+  return [
+      LinalgGenericNamedOpConfig(tc_op_def.comprehensions[0],
+                                 tc_op_def.metadata, context)
+  ]
 
 
 class TensorUseConfig:
@@ -100,10 +102,11 @@ class LinalgGenericNamedOpConfig(YAMLObject):
 
     # Now normalize all defs and uses indexing maps now that full count of
     # dims and symbols are known.
-    for c in self.uses.values():
-      c.indexing_map = self._normalize_affine_map(c.indexing_map)
-    for c in self.tensor_args.values():
-      c.shape_map = self._normalize_affine_map(c.shape_map, with_dims=False)
+    for cuse in self.uses.values():
+      cuse.indexing_map = self._normalize_affine_map(cuse.indexing_map)
+    for cdef in self.tensor_args.values():
+      cdef.shape_map = self._normalize_affine_map(cdef.shape_map,
+                                                  with_dims=False)
 
     # Now for each write use, propagate the indexing maps from the use to the
     # tensor, ensuring that there are not conflicts.
@@ -117,12 +120,12 @@ class LinalgGenericNamedOpConfig(YAMLObject):
     # For each read use, propagate the indexing maps from the use to the
     # tensor, ensuring that there are not conflicts.
     for _, read_expr in self.writes:
-      read_uses = set()
+      read_uses = set()  # type: Set[TensorUse]
       read_expr.collect_uses(read_uses)
       for read_use in read_uses:
         read_tensor_def = self.tensor_args[read_use.tensor_def]
         if (read_tensor_def.indexing_map and
-            read_tensor_def.indexing_map != read_use.indexing_map):
+            read_tensor_def.indexing_map != self.uses[read_use].indexing_map):
           raise ValueError(
               f"Unexpected multi-read of a tensor with different accesses:"
               f"{read_tensor_def} vs {read_use}")

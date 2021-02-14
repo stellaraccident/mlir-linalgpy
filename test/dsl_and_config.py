@@ -2,8 +2,6 @@
 
 from mlir import ir
 from mlir_linalg.dsl.tc import *
-from mlir_linalg.dsl.linalg_op_config import *
-from mlir_linalg.dsl import yaml_helper
 
 @tc_def_op
 def matmul_poly(A=TensorDef(T, S.M, S.K),
@@ -41,4 +39,4 @@ def matmul_poly(A=TensorDef(T, S.M, S.K),
 # CHECK:       - parallel
 # CHECK:       - reduction
 # CHECK:       name: matmul_poly
-print(yaml_helper.dump(from_tc_op_def(matmul_poly.model)))
+print(matmul_poly.model.to_yaml())

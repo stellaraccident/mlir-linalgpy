@@ -10,7 +10,6 @@ from .yaml_helper import *
 
 # Type aliases.
 AffineDimList = Dict[str, _ir.AffineExpr]
-ShapeCoercable = Sequence[AffineExprDef]
 
 
 class Expression:
@@ -99,7 +98,7 @@ class TensorDef:
 
   def __init__(self,
                type_var: TypeVar,
-               *shape: ShapeCoercable,
+               *shape: AffineExprDef,
                indexing_map: Optional[_ir.AffineMap] = None,
                output: bool = False):
     if not isinstance(type_var, TypeVar):
@@ -110,7 +109,7 @@ class TensorDef:
     self.indexing_map = indexing_map
     self.output = output
     self.tensor_name = None  # type: Optional[str]
-    self.registered_index = None  # type: Optional[int]
+    self.registered_index = -1  # type: int
 
   @property
   def rank(self) -> int:
@@ -362,6 +361,12 @@ class TcOpDef:
         lines.append(f"    {comprehension}")
       lines.append("}")
     return "\n".join(lines)
+
+  def to_yaml(self):
+    # TODO: This is gross but useful. Make it cleaner.
+    from .linalg_op_config import from_tc_op_def
+    configs = from_tc_op_def(self)
+    return yaml.dump_all(configs)
 
 
 if __name__ == "__main__":
