@@ -6,6 +6,7 @@ from mlir import ir as _ir
 
 from .affine import *
 from .types import *
+from .yaml_helper import *
 
 # Type aliases.
 AffineDimList = Dict[str, _ir.AffineExpr]
@@ -285,6 +286,23 @@ class ReduceApply(Expression):
     return f"{repr(self.reduce)}({', '.join(repr(a) for a in self.args)})"
 
 
+class OpMetadataDef(YAMLObject):
+  """Metadata about the op (generally not behavior impacting)."""
+  yaml_tag = "!LinalgOpMetadata"
+
+  def __init__(self, name: str, cpp_op_name: Optional[str], doc: Optional[str]):
+    self.name = name
+    self.cpp_op_name = cpp_op_name if cpp_op_name is not None else name
+    self.doc = doc
+
+  def to_yaml_custom_dict(self):
+    return dict(
+        name=self.name,
+        cpp_op_name=self.cpp_op_name,
+        doc=self.doc,
+    )
+
+
 class TcOpDef:
   """Definition of a named op.
 
@@ -302,9 +320,11 @@ class TcOpDef:
       C:TensorDef(OUTPUT type_pred=f32, shape=()[s0, s1] -> (s0, s2))
   """
 
-  def __init__(self, name: str, cpp_op_name: str = None):
-    self.name = name
-    self.cpp_op_name = cpp_op_name if cpp_op_name is not None else name
+  def __init__(self,
+               name: str,
+               cpp_op_name: Optional[str] = None,
+               doc: Optional[str] = None):
+    self.metadata = OpMetadataDef(name=name, cpp_op_name=cpp_op_name, doc=doc)
     self.registered_tensors = dict()  # type: Dict[str, TensorDef]
     self.comprehensions = list()  # type: List[Comprehension]
     self._affine_state = AffineBuildState()
@@ -333,7 +353,7 @@ class TcOpDef:
       raise KeyError(f"Tensor {name} is not registered")
 
   def __repr__(self):
-    lines = [f"TcOpDef({self.name} -> {self.cpp_op_name},"]
+    lines = [f"TcOpDef({self.metadata.name} -> {self.metadata.cpp_op_name},"]
     for name, tensor in self.registered_tensors.items():
       lines.append(f"  {tensor}")
     if self.comprehensions:

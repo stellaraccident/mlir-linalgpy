@@ -5,15 +5,26 @@ objects and therefore needs to be constructed specifically when a context is
 available (and then only used on that context).
 """
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from mlir import ir as _ir
 
 from .tc_model import *
+from .yaml_helper import *
 
 __all__ = [
+    "from_tc_op_def",
     "LinalgGenericNamedOpConfig",
 ]
+
+
+def from_tc_op_def(tc_op_def: TcOpDef,
+                   context: Optional[_ir.Context] = None) -> Sequence[Any]:
+  """Expands a TcOpDef into corresponding Linalg configured ops."""
+  # TODO: Many TcOpDef patterns need to expand to multiple generics.
+  assert len(tc_op_def.comprehensions) == 1, "Only one comprehension supported"
+  return LinalgGenericNamedOpConfig(tc_op_def.comprehensions[0],
+                                    tc_op_def.metadata, context)
 
 
 class TensorUseConfig:
@@ -27,25 +38,44 @@ class TensorUseConfig:
     return f"Use({self.tensor_use}, indexing_map={self.indexing_map})"
 
 
-class TensorDefConfig:
+class TensorDefConfig(YAMLObject):
   """Wrapper around a TensorDef with additional context-bound state."""
+  yaml_tag = "LinalgTensorDef"
 
   def __init__(self, tensor_def: TensorDef, shape_map: _ir.AffineMap):
     self.tensor_def = tensor_def
     self.shape_map = shape_map
     self.indexing_map = None  # type: Optional[_ir.AffineMap]
 
+  def to_yaml_custom_dict(self):
+
+    def get_usage():
+      if self.tensor_def.output:
+        return "output"
+      else:
+        return "input"
+
+    return dict(
+        name=self.tensor_def.tensor_name,
+        usage=get_usage(),
+        shape=str(self.shape_map),
+    )
+
   def __repr__(self):
     return f"Def({self.tensor_def}, shape_map={self.shape_map}, indexing_map={self.indexing_map})"
 
 
-class LinalgGenericNamedOpConfig:
+class LinalgGenericNamedOpConfig(YAMLObject):
   """Configuration for metadata sufficient to construct a linalg single
   contraction named op."""
 
+  yaml_tag = "!LinalgGenericNamedOpConfig"
+
   def __init__(self,
                comprehension: Comprehension,
+               metadata: Optional[OpMetadataDef] = None,
                context: Optional[_ir.Context] = None):
+    self.metadata = metadata
     self.context = context if context is not None else _ir.Context()
     self.affine_state = AffineBuildState()
     self.writes = list()  # type: List[Tuple[TensorUse, Expression]]
@@ -185,6 +215,16 @@ class LinalgGenericNamedOpConfig:
       return _ir.AffineMap.get(dim_count=self.affine_state.dim_count,
                                symbol_count=self.affine_state.symbol_count,
                                exprs=list(affine_map.results))
+
+  def to_yaml_custom_dict(self):
+    self_dict = dict(
+        args=self.ordered_tensor_args,
+        indexing_maps=[str(m) for m in self.indexing_maps],
+        iterator_types=self.iterator_types,
+    )
+    if self.metadata:
+      self_dict.update(self.metadata.to_yaml_custom_dict())
+    return self_dict
 
   def __repr__(self):
     lines = [f"LinalgGenericOpConfig(reduction_dims={self.reduction_dims},"]

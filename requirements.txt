@@ -1,4 +1,5 @@
 lit
 mypy
 numpy
+pyyaml
 mlir-snapshot

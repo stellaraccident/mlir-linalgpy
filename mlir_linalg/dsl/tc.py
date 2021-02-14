@@ -25,7 +25,9 @@ def tc_def_op(dsl_func=None, *, op_name=None, op_class_name=None):
     # Camel case it.
     op_class_name = f"{''.join(x.title() for x in op_name.split('_'))}Op"
 
-  tc_model = TcOpDef(name=op_name, cpp_op_name=op_class_name)
+  tc_model = TcOpDef(name=op_name,
+                     cpp_op_name=op_class_name,
+                     doc=dsl_func.__doc__)
 
   # Extract arguments and TensorDefs from the signature.
   dsl_func_args = list()
@@ -43,4 +45,3 @@ def tc_def_op(dsl_func=None, *, op_name=None, op_class_name=None):
   dsl_func(*dsl_func_args)
 
   return TcEmitGenericCallable(op_name, tc_model)
-
