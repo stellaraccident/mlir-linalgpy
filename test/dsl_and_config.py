@@ -19,15 +19,15 @@ def matmul_poly(A=TensorDef(T, S.M, S.K),
 # CHECK:       args:
 # CHECK:       - !<LinalgTensorDef>
 # CHECK:         name: A
-# CHECK:         shape: (d0, d1, d2)[s0, s1, s2] -> (s0, s2)
+# CHECK:         shape: ()[s0, s1, s2] -> (s0, s2)
 # CHECK:         usage: input
 # CHECK:       - !<LinalgTensorDef>
 # CHECK:         name: B
-# CHECK:         shape: (d0, d1, d2)[s0, s1, s2] -> (s2, s1)
+# CHECK:         shape: ()[s0, s1, s2] -> (s2, s1)
 # CHECK:         usage: input
 # CHECK:       - !<LinalgTensorDef>
 # CHECK:         name: C
-# CHECK:         shape: (d0, d1, d2)[s0, s1, s2] -> (s0, s1)
+# CHECK:         shape: ()[s0, s1, s2] -> (s0, s1)
 # CHECK:         usage: output
 # CHECK:       cpp_op_name: MatmulPolyOp
 # CHECK:       doc: "This is a type polymorphic matmul with a configurable accumulator type.\n\n\

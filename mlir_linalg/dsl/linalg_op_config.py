@@ -103,7 +103,7 @@ class LinalgGenericNamedOpConfig(YAMLObject):
     for c in self.uses.values():
       c.indexing_map = self._normalize_affine_map(c.indexing_map)
     for c in self.tensor_args.values():
-      c.shape_map = self._normalize_affine_map(c.shape_map)
+      c.shape_map = self._normalize_affine_map(c.shape_map, with_dims=False)
 
     # Now for each write use, propagate the indexing maps from the use to the
     # tensor, ensuring that there are not conflicts.
@@ -209,12 +209,15 @@ class LinalgGenericNamedOpConfig(YAMLObject):
       use_config = TensorUseConfig(tensor_use, indexing_map)
       self.uses[tensor_use] = use_config
 
-  def _normalize_affine_map(self, affine_map: _ir.AffineMap) -> _ir.AffineMap:
+  def _normalize_affine_map(self,
+                            affine_map: _ir.AffineMap,
+                            with_dims: bool = True) -> _ir.AffineMap:
     """Normalizes an indexing map to have the max known symbols and dims."""
     with self.context:
-      return _ir.AffineMap.get(dim_count=self.affine_state.dim_count,
-                               symbol_count=self.affine_state.symbol_count,
-                               exprs=list(affine_map.results))
+      return _ir.AffineMap.get(
+          dim_count=self.affine_state.dim_count if with_dims else 0,
+          symbol_count=self.affine_state.symbol_count,
+          exprs=list(affine_map.results))
 
   def to_yaml_custom_dict(self):
     self_dict = dict(
