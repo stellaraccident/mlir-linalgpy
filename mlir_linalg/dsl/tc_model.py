@@ -366,7 +366,7 @@ class TcOpDef:
     # TODO: This is gross but useful. Make it cleaner.
     from .linalg_op_config import from_tc_op_def
     configs = from_tc_op_def(self)
-    return yaml.dump_all(configs)
+    return yaml_dump_all(configs)
 
 
 if __name__ == "__main__":

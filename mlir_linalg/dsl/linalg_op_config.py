@@ -224,12 +224,11 @@ class LinalgGenericNamedOpConfig(YAMLObject):
 
   def to_yaml_custom_dict(self):
     self_dict = dict(
+        metadata=self.metadata,
         args=self.ordered_tensor_args,
         indexing_maps=[str(m) for m in self.indexing_maps],
         iterator_types=self.iterator_types,
     )
-    if self.metadata:
-      self_dict.update(self.metadata.to_yaml_custom_dict())
     return self_dict
 
   def __repr__(self):

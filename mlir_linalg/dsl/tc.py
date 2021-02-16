@@ -27,7 +27,7 @@ def tc_def_op(dsl_func=None, *, op_name=None, op_class_name=None):
 
   tc_model = TcOpDef(name=op_name,
                      cpp_op_name=op_class_name,
-                     doc=dsl_func.__doc__)
+                     doc=inspect.getdoc(dsl_func))
 
   # Extract arguments and TensorDefs from the signature.
   dsl_func_args = list()
