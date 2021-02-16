@@ -21,7 +21,7 @@ jobs:
           python -m pip install -r requirements.txt -f https://github.com/stellaraccident/mlir-py-release/releases
       - name: Check types
         run: |
-          mypy samples/kernels.py
+          mypy samples/simple_kernels.py
       - name: Setup FileCheck
         run: |
           ls -l /usr/bin/FileCheck-*
@@ -29,3 +29,10 @@ jobs:
       - name: Run Tests
         run: |
           lit test -v
+      - name: Run some samples
+        run: |
+          export PYTHONPATH="$PWD"
+          for i in samples/*.py; do
+            echo "+++ Running $i"
+            python "$i"
+          done

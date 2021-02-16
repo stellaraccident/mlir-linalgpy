@@ -364,8 +364,8 @@ class TcOpDef:
 
   def to_yaml(self):
     # TODO: This is gross but useful. Make it cleaner.
-    from .linalg_op_config import from_tc_op_def
-    configs = from_tc_op_def(self)
+    from .linalg_op_config import LinalgOpConfig
+    configs = LinalgOpConfig.from_tc_op_def(self)
     return yaml_dump_all(configs)
 
 

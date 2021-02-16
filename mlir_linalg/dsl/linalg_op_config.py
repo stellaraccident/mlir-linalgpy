@@ -13,20 +13,9 @@ from .tc_model import *
 from .yaml_helper import *
 
 __all__ = [
-    "from_tc_op_def",
-    "LinalgGenericNamedOpConfig",
+    "LinalgNamedGenericOpConfig",
+    "LinalgOpConfig",
 ]
-
-
-def from_tc_op_def(tc_op_def: TcOpDef,
-                   context: Optional[_ir.Context] = None) -> Sequence[Any]:
-  """Expands a TcOpDef into corresponding Linalg configured ops."""
-  # TODO: Many TcOpDef patterns need to expand to multiple generics.
-  assert len(tc_op_def.comprehensions) == 1, "Only one comprehension supported"
-  return [
-      LinalgGenericNamedOpConfig(tc_op_def.comprehensions[0],
-                                 tc_op_def.metadata, context)
-  ]
 
 
 class TensorUseConfig:
@@ -67,17 +56,15 @@ class TensorDefConfig(YAMLObject):
     return f"Def({self.tensor_def}, shape_map={self.shape_map}, indexing_map={self.indexing_map})"
 
 
-class LinalgGenericNamedOpConfig(YAMLObject):
+class LinalgNamedGenericOpConfig(YAMLObject):
   """Configuration for metadata sufficient to construct a linalg single
   contraction named op."""
 
-  yaml_tag = "!LinalgGenericNamedOpConfig"
+  yaml_tag = "!LinalgNamedGenericOpConfig"
 
   def __init__(self,
                comprehension: Comprehension,
-               metadata: Optional[OpMetadataDef] = None,
                context: Optional[_ir.Context] = None):
-    self.metadata = metadata
     self.context = context if context is not None else _ir.Context()
     self.affine_state = AffineBuildState()
     self.writes = list()  # type: List[Tuple[TensorUse, Expression]]
@@ -224,7 +211,6 @@ class LinalgGenericNamedOpConfig(YAMLObject):
 
   def to_yaml_custom_dict(self):
     self_dict = dict(
-        metadata=self.metadata,
         args=self.ordered_tensor_args,
         indexing_maps=[str(m) for m in self.indexing_maps],
         iterator_types=self.iterator_types,
@@ -244,3 +230,39 @@ class LinalgGenericNamedOpConfig(YAMLObject):
       lines.append(f"  {t}")
     lines.append("])")
     return "\n".join(lines)
+
+
+class LinalgOpConfig(YAMLObject):
+  """Container for any supported linalg op type.
+
+  This includes the concrete type by name for ease of parsing by systems
+  that ignore tags.
+  """
+  yaml_tag = "!LinalgOpConfig"
+
+  def __init__(self,
+               metadata: OpMetadataDef,
+               *,
+               named_generic: Optional[LinalgNamedGenericOpConfig] = None):
+    self.metadata = metadata
+    self.named_generic = named_generic
+
+  def to_yaml_custom_dict(self):
+    self_dict = dict(metadata=self.metadata,)
+    if self.named_generic:
+      self_dict["named_generic"] = self.named_generic
+    return self_dict
+
+  @staticmethod
+  def from_tc_op_def(
+      tc_op_def: TcOpDef,
+      context: Optional[_ir.Context] = None) -> Sequence["LinalgOpConfig"]:
+    """Expands a TcOpDef into corresponding Linalg configured ops."""
+    # TODO: Many TcOpDef patterns need to expand to multiple generics.
+    assert len(
+        tc_op_def.comprehensions) == 1, "Only one comprehension supported"
+    return [
+        LinalgOpConfig(tc_op_def.metadata,
+                       named_generic=LinalgNamedGenericOpConfig(
+                           tc_op_def.comprehensions[0], context)),
+    ]

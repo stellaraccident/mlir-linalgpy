@@ -38,5 +38,8 @@ def yaml_dump(data, sort_keys=False, **kwargs):
   return yaml.dump(data, sort_keys=sort_keys, **kwargs)
 
 
-def yaml_dump_all(data, sort_keys=False, **kwargs):
-  return yaml.dump(data, sort_keys=sort_keys, **kwargs)
+def yaml_dump_all(data, sort_keys=False, explicit_start=True, **kwargs):
+  return yaml.dump_all(data,
+                       sort_keys=sort_keys,
+                       explicit_start=explicit_start,
+                       **kwargs)
