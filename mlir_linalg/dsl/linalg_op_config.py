@@ -18,6 +18,13 @@ __all__ = [
 ]
 
 
+def _serialize_affine_map(affine_map: _ir.AffineMap) -> str:
+  with affine_map.context:
+    # Affine map printing/parsing is via an AffineMap attr.
+    attr = _ir.AffineMapAttr.get(affine_map)
+    return str(attr)
+
+
 class TensorUseConfig:
   """Wrapper around a TensorUse with additional context-bound state."""
 
@@ -49,7 +56,7 @@ class TensorDefConfig(YAMLObject):
     return dict(
         name=self.tensor_def.tensor_name,
         usage=get_usage(),
-        shape=str(self.shape_map),
+        shape=_serialize_affine_map(self.shape_map),
     )
 
   def __repr__(self):
@@ -212,7 +219,7 @@ class LinalgNamedGenericOpConfig(YAMLObject):
   def to_yaml_custom_dict(self):
     self_dict = dict(
         args=self.ordered_tensor_args,
-        indexing_maps=[str(m) for m in self.indexing_maps],
+        indexing_maps=[_serialize_affine_map(m) for m in self.indexing_maps],
         iterator_types=self.iterator_types,
     )
     return self_dict
