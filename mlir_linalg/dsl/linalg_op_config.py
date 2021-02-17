@@ -13,7 +13,7 @@ from .tc_model import *
 from .yaml_helper import *
 
 __all__ = [
-    "LinalgNamedGenericOpConfig",
+    "LinalgStructuredOpConfig",
     "LinalgOpConfig",
 ]
 
@@ -63,11 +63,36 @@ class TensorDefConfig(YAMLObject):
     return f"Def({self.tensor_def}, shape_map={self.shape_map}, indexing_map={self.indexing_map})"
 
 
-class LinalgNamedGenericOpConfig(YAMLObject):
+class LinalgIndexingMapsConfig(YAMLObject):
+  """Abstracts the style of indexing maps that the op exports.
+
+  Presently only static (tied to the op name) indexing maps are supported. In
+  the future, it is expected that we will have additional variants:
+    - Dynamic based on attributes
+    - Dynamic based on operands
+  Each is expected to require a different variant of specification.
+  """
+  yaml_tag = "!LinalgIndexingMapsConfig"
+
+  def __init__(self,
+               static_indexing_maps: Optional[Sequence[_ir.AffineMap]] = None):
+    self.static_indexing_maps = static_indexing_maps
+
+  def to_yaml_custom_dict(self):
+    if self.static_indexing_maps is not None:
+      return dict(static_indexing_maps=[
+          _serialize_affine_map(m) for m in self.static_indexing_maps
+      ])
+    raise ValueError(
+        f"LinalgIndexingMapsConfig must have one type of indexing map"
+        f"(got none)")
+
+
+class LinalgStructuredOpConfig(YAMLObject):
   """Configuration for metadata sufficient to construct a linalg single
   contraction named op."""
 
-  yaml_tag = "!LinalgNamedGenericOpConfig"
+  yaml_tag = "!LinalgStructuredOpConfig"
 
   def __init__(self,
                comprehension: Comprehension,
@@ -219,7 +244,10 @@ class LinalgNamedGenericOpConfig(YAMLObject):
   def to_yaml_custom_dict(self):
     self_dict = dict(
         args=self.ordered_tensor_args,
-        indexing_maps=[_serialize_affine_map(m) for m in self.indexing_maps],
+        # TODO: Refactor the hierarchy internally when supporting more
+        # than static (preserving this serialized form).
+        indexing_maps=LinalgIndexingMapsConfig(
+            static_indexing_maps=self.indexing_maps),
         iterator_types=self.iterator_types,
     )
     return self_dict
@@ -250,14 +278,14 @@ class LinalgOpConfig(YAMLObject):
   def __init__(self,
                metadata: OpMetadataDef,
                *,
-               named_generic: Optional[LinalgNamedGenericOpConfig] = None):
+               structured_op: Optional[LinalgStructuredOpConfig] = None):
     self.metadata = metadata
-    self.named_generic = named_generic
+    self.structured_op = structured_op
 
   def to_yaml_custom_dict(self):
     self_dict = dict(metadata=self.metadata,)
-    if self.named_generic:
-      self_dict["named_generic"] = self.named_generic
+    if self.structured_op:
+      self_dict["structured_op"] = self.structured_op
     return self_dict
 
   @staticmethod
@@ -270,6 +298,6 @@ class LinalgOpConfig(YAMLObject):
         tc_op_def.comprehensions) == 1, "Only one comprehension supported"
     return [
         LinalgOpConfig(tc_op_def.metadata,
-                       named_generic=LinalgNamedGenericOpConfig(
+                       structured_op=LinalgStructuredOpConfig(
                            tc_op_def.comprehensions[0], context)),
     ]
