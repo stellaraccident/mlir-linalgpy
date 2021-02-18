@@ -99,7 +99,7 @@ class LinalgStructuredOpConfig(YAMLObject):
                context: Optional[_ir.Context] = None):
     self.context = context if context is not None else _ir.Context()
     self.affine_state = AffineBuildState()
-    self.writes = list()  # type: List[Tuple[TensorUse, Expression]]
+    self.writes = list()  # type: List[Tuple[TensorUse, TensorExpression]]
     self.tensor_args = dict()  # type: Dict[TensorDef, TensorDefConfig]
     self.uses = dict()  # type: Dict[TensorUse, TensorUseConfig]
 

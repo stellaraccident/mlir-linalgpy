@@ -67,6 +67,7 @@ class TensorUse(TensorExpression):
     self.indices = tuple(indices)
 
   def to_scalar_expression(self) -> ScalarExpression:
+    assert self.tensor_def.tensor_name is not None
     return ScalarArg(self.tensor_def.tensor_name).expr()
 
   @property
