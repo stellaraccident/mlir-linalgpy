@@ -43,4 +43,21 @@ def matmul_poly(A=TensorDef(T, S.M, S.K),
 # CHECK:   - parallel
 # CHECK:   - parallel
 # CHECK:   - reduction
+# CHECK:   assignments:
+# CHECK:   - !ScalarAssign
+# CHECK:       arg: C
+# CHECK:       value: !ScalarExpression
+# CHECK:         scalar_apply:
+# CHECK:           fn_name: add
+# CHECK:           operands:
+# CHECK:           - !ScalarExpression
+# CHECK:             scalar_arg: C
+# CHECK:           - !ScalarExpression
+# CHECK:             scalar_apply:
+# CHECK:               fn_name: mul
+# CHECK:               operands:
+# CHECK:               - !ScalarExpression
+# CHECK:                 scalar_arg: A
+# CHECK:               - !ScalarExpression
+# CHECK:                 scalar_arg: B
 print(matmul_poly.model.to_yaml())

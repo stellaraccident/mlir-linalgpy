@@ -162,6 +162,12 @@ class LinalgStructuredOpConfig(YAMLObject):
           f"dims. Got: {all_reduction_dims}")
     self.reduction_dims = next(iter(all_reduction_dims))
 
+    # Generate the scalar assignments (used to build a body).
+    self.assignments = [
+      ScalarAssign(write_use.tensor_name, read_expr.to_scalar_expression())
+      for write_use, read_expr in self.writes
+    ]
+
   @property
   def ordered_tensor_args(self) -> Sequence[TensorDefConfig]:
     return sorted(self.tensor_args.values(),
@@ -249,6 +255,7 @@ class LinalgStructuredOpConfig(YAMLObject):
         indexing_maps=LinalgIndexingMapsConfig(
             static_indexing_maps=self.indexing_maps),
         iterator_types=self.iterator_types,
+        assignments=self.assignments,
     )
     return self_dict
 

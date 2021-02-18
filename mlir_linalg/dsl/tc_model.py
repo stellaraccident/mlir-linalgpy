@@ -5,6 +5,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 from mlir import ir as _ir
 
 from .affine import *
+from .scalar_expr import *
 from .types import *
 from .yaml_helper import *
 
@@ -12,8 +13,11 @@ from .yaml_helper import *
 AffineDimList = Dict[str, _ir.AffineExpr]
 
 
-class Expression:
+class TensorExpression:
   """An expression that can appear on the RHS of a comprehension."""
+
+  def to_scalar_expression(self) -> ScalarExpression:
+    raise NotImplementedError()
 
   def visit_affine_exprs(self, callback):
     """Visits all affine expressions reachable by the expression."""
@@ -34,20 +38,20 @@ class Expression:
     """Collects all TensorUses reachable through this expression."""
     pass
 
-  def __add__(self, rhs: "Expression") -> "Expression":
+  def __add__(self, rhs: "TensorExpression") -> "TensorExpression":
     return PrimFn.add(self, rhs)
 
-  def __mul__(self, rhs) -> "Expression":
+  def __mul__(self, rhs) -> "TensorExpression":
     return PrimFn.mul(self, rhs)
 
-  def __sub__(self, rhs) -> "Expression":
+  def __sub__(self, rhs) -> "TensorExpression":
     return PrimFn.sub(self, rhs)
 
   def __hash__(self):
     return hash(id(self))
 
 
-class TensorUse(Expression):
+class TensorUse(TensorExpression):
   """A used tensor represented by its (tensor_name, indices).
 
   Note that forming a comprehension via direct assignment is performed through
@@ -62,6 +66,9 @@ class TensorUse(Expression):
     self.tensor_def = tensor_def
     self.indices = tuple(indices)
 
+  def to_scalar_expression(self) -> ScalarExpression:
+    return ScalarArg(self.tensor_def.tensor_name).expr()
+
   @property
   def tensor_name(self) -> str:
     n = self.tensor_def.tensor_name
@@ -75,10 +82,10 @@ class TensorUse(Expression):
   def collect_uses(self, uses: Set["TensorUse"]):
     uses.add(self)
 
-  def __iadd__(self, rhs: Expression) -> Expression:
+  def __iadd__(self, rhs: TensorExpression) -> TensorExpression:
     return ReduceFn.add(*self._compute_reduce_dims(rhs))(rhs)
 
-  def _compute_reduce_dims(self, rhs: Expression) -> Set[DimDef]:
+  def _compute_reduce_dims(self, rhs: TensorExpression) -> Set[DimDef]:
     """For implicit reductions, computes default reduction dims.
 
     Assumes that the rhs is the expression being reduced and self is being
@@ -146,8 +153,8 @@ class TensorDef:
     Note that due to the way assignment works in Python, we have to capture
     direct assignment as a setitem on the TensorDef.
     """
-    if not isinstance(value, Expression):
-      raise ValueError(f"Only Expressions can be assigned to TensorDefs. "
+    if not isinstance(value, TensorExpression):
+      raise ValueError(f"Only TensorExpressions can be assigned to TensorDefs. "
                        f"Got: {repr(value)}")
     use = self[dims]
     comp = Comprehension((use, value))
@@ -165,9 +172,18 @@ class TensorDef:
 class Comprehension:
   """Represents a single comprehension."""
 
-  def __init__(self, *bindings: Tuple[TensorUse, Expression]):
-    self.definitions = [d for d, _ in bindings]
-    self.values = [v for _, v in bindings]
+  def __init__(self, *bindings: Tuple[TensorUse, TensorExpression]):
+    self.definitions = list()  # List[TensorUse]
+    self.values = list()  # List[TensorExpression]
+
+    # Find the lhs to reduction rhs.
+    for assign, value in bindings:
+      if isinstance(value, ReduceApply):
+        if value.lhs:
+          raise ValueError(f"Reduction expression already assigns: {value}")
+        value.lhs = assign
+      self.definitions.append(assign)
+      self.values.append(value)
 
   @property
   def all_reduction_dims(self) -> Set[Tuple[DimDef, ...]]:
@@ -227,7 +243,7 @@ class ReduceFnType:
     self.operator = operator
     self.reduce_dims = tuple(reduce_dims)
 
-  def __call__(self, *args: Expression):
+  def __call__(self, *args: TensorExpression):
     return ReduceApply(self, args)
 
   def __repr__(self):
@@ -241,12 +257,17 @@ class ReduceFn:
   max = PrimFn.max.reduce
 
 
-class PrimApply(Expression):
+class PrimApply(TensorExpression):
   """Application of a primitive."""
 
-  def __init__(self, prim: PrimFnType, args: Sequence[Expression]):
+  def __init__(self, prim: PrimFnType, args: Sequence[TensorExpression]):
     self.prim = prim
     self.args = tuple(args)
+
+  def to_scalar_expression(self) -> ScalarExpression:
+    return ScalarApplyFn(self.prim.prim_name,
+                         *[arg.to_scalar_expression() for arg in self.args
+                          ]).expr()
 
   def visit_affine_exprs(self, callback):
     for arg in self.args:
@@ -260,16 +281,24 @@ class PrimApply(Expression):
     return f"{repr(self.prim)}({', '.join(repr(a) for a in self.args)})"
 
 
-class ReduceApply(Expression):
+class ReduceApply(TensorExpression):
   """Application of a reduction.
 
-  Note that this only captures the reduction indices and the right hand side.
-  It is assumed that it is applied to a LHS external to the expression.
+  This captures the lhs separately (initial value) separately from the rhs.
   """
 
-  def __init__(self, reduce: ReduceFnType, args: Sequence[Expression]):
+  def __init__(self, reduce: ReduceFnType, args: Sequence[TensorExpression]):
     self.reduce = reduce
+    self.lhs = None  # type: Optional[TensorUse]
     self.args = tuple(args)
+
+  def to_scalar_expression(self) -> ScalarExpression:
+    if self.lhs is None:
+      raise ValueError(f"Cannot scalarize a ReduceApply that has not been "
+                       f"bound to its lhs: {self}")
+    full_args = [self.lhs.to_scalar_expression()
+                ] + [arg.to_scalar_expression() for arg in self.args]
+    return ScalarApplyFn(self.reduce.operator.prim_name, *full_args).expr()
 
   def visit_affine_exprs(self, callback):
     for ind in self.reduce.reduce_dims:
