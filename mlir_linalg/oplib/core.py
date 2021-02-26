@@ -12,4 +12,5 @@ def polymorphic_matmul(A=TensorDef(T, S.M, S.K),
   This op is presently here to test a new path for generation and will replace
   the existing 'matmul' op when ready. Do not use.
   """
+  implements(ContractionOpInterface)
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]

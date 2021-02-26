@@ -315,6 +315,16 @@ class ReduceApply(TensorExpression):
     return f"{repr(self.reduce)}({', '.join(repr(a) for a in self.args)})"
 
 
+class OpInterfaceDef:
+  """An interface that an op implements."""
+
+  def __init__(self, cpp_name: str):
+    self.cpp_name = cpp_name
+
+
+ContractionOpInterface = OpInterfaceDef("LinalgContractionOpInterface")
+
+
 class OpMetadataDef(YAMLObject):
   """Metadata about the op (generally not behavior impacting)."""
   yaml_tag = "!LinalgOpMetadata"
@@ -323,13 +333,17 @@ class OpMetadataDef(YAMLObject):
     self.name = name
     self.cpp_op_name = cpp_op_name if cpp_op_name is not None else name
     self.doc = doc
+    self.implements = []  # type: List[OpInterfaceDef]
 
   def to_yaml_custom_dict(self):
-    return dict(
+    d = dict(
         name=self.name,
         cpp_op_name=self.cpp_op_name,
         doc=self.doc,
     )
+    if self.implements:
+      d["implements"] = [intr.cpp_name for intr in self.implements]
+    return d
 
 
 class TcOpDef:

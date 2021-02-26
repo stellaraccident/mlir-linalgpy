@@ -12,6 +12,26 @@ from ..ir_gen.emitter import *
 _CONTEXT = threading.local()
 
 
+@contextmanager
+def bind_op_def(model: TcOpDef):
+  if hasattr(_CONTEXT, "current_op_def"):
+    raise ValueError("Cannot recursively define an operation")
+  _CONTEXT.current_op_def = model
+  try:
+    yield model
+  finally:
+    del _CONTEXT.current_op_def
+
+
+def current_op_def() -> TcOpDef:
+  try:
+    return _CONTEXT.current_op_def
+  except AttributeError:
+    raise ValueError(
+        "Attempt to access the current op definition being defined "
+        "but none is set. Did you mean to call this in an op definition?")
+
+
 def tc_def_op(dsl_func=None, *, op_name=None, op_class_name=None):
   if dsl_func is None:
     # Curry the keyword args in for delayed application.
@@ -41,7 +61,11 @@ def tc_def_op(dsl_func=None, *, op_name=None, op_class_name=None):
     tc_model.add_tensor(param_name, param_default)
 
   # Invoke the DSL func to finish populating the model.
-  # TODO: Wrap in context manager.
-  dsl_func(*dsl_func_args)
+  with bind_op_def(tc_model):
+    dsl_func(*dsl_func_args)
 
   return TcEmitGenericCallable(op_name, tc_model)
+
+
+def implements(*interfaces: OpInterfaceDef):
+  current_op_def().metadata.implements.extend(interfaces)
