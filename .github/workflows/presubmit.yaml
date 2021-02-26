@@ -22,6 +22,7 @@ jobs:
       - name: Check types
         run: |
           mypy samples/simple_kernels.py
+          mypy mlir_linalg/tools/dump_oplib.py
       - name: Setup FileCheck
         run: |
           ls -l /usr/bin/FileCheck-*
@@ -32,6 +33,7 @@ jobs:
       - name: Run some samples
         run: |
           export PYTHONPATH="$PWD"
+          python -m mlir_linalg.tools.dump_oplib mlir_linalg.oplib.core
           for i in samples/*.py; do
             echo "+++ Running $i"
             python "$i"

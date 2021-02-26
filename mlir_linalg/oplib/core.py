@@ -13,10 +13,3 @@ def polymorphic_matmul(A=TensorDef(T, S.M, S.K),
   the existing 'matmul' op when ready. Do not use.
   """
   C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
-
-
-# TODO: Make a neat little helper to interpret an op module as
-# yaml linalg ops.
-configs = []
-configs.extend(LinalgOpConfig.from_tc_op_def(polymorphic_matmul.model))
-print(yaml_dump_all(configs))

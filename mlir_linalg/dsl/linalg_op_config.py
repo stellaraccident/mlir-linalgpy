@@ -164,8 +164,8 @@ class LinalgStructuredOpConfig(YAMLObject):
 
     # Generate the scalar assignments (used to build a body).
     self.assignments = [
-      ScalarAssign(write_use.tensor_name, read_expr.to_scalar_expression())
-      for write_use, read_expr in self.writes
+        ScalarAssign(write_use.tensor_name, read_expr.to_scalar_expression())
+        for write_use, read_expr in self.writes
     ]
 
   @property
@@ -308,3 +308,7 @@ class LinalgOpConfig(YAMLObject):
                        structured_op=LinalgStructuredOpConfig(
                            tc_op_def.comprehensions[0], context)),
     ]
+
+  def __repr__(self):
+    return (f"LinalgOpConfig(metadata={self.metadata},\n"
+            f"structured_op={self.structured_op})")
