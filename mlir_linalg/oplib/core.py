@@ -1,8 +1,11 @@
 from mlir_linalg.dsl.tc import *
 
+T1 = TV.T1
+T2 = TV.T2
+
 @tc_def_op
-def polymorphic_matmul(A=TensorDef(T, S.M, S.K),
-                       B=TensorDef(T, S.K, S.N),
+def polymorphic_matmul(A=TensorDef(T1, S.M, S.K),
+                       B=TensorDef(T2, S.K, S.N),
                        C=TensorDef(U, S.M, S.N, output=True)):
   """Type polymorphic matrix multiplication.
 
