@@ -1,7 +1,4 @@
 from mlir_linalg.dsl.tc import *
-from mlir_linalg.dsl.linalg_op_config import *
-from mlir_linalg.dsl.yaml_helper import *
-
 
 @tc_def_op
 def polymorphic_matmul(A=TensorDef(T, S.M, S.K),
@@ -13,4 +10,4 @@ def polymorphic_matmul(A=TensorDef(T, S.M, S.K),
   the existing 'matmul' op when ready. Do not use.
   """
   implements(ContractionOpInterface)
-  C[D.m, D.n] += A[D.m, D.k] * B[D.k, D.n]
+  C[D.m, D.n] += cast(U, A[D.m, D.k]) * cast(U, B[D.k, D.n])

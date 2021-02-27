@@ -57,6 +57,7 @@ class TensorDefConfig(YAMLObject):
         name=self.tensor_def.tensor_name,
         usage=get_usage(),
         shape=_serialize_affine_map(self.shape_map),
+        element_type_var=self.tensor_def.type_var.name,
     )
 
   def __repr__(self):

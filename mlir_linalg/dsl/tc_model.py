@@ -282,6 +282,27 @@ class PrimApply(TensorExpression):
     return f"{repr(self.prim)}({', '.join(repr(a) for a in self.args)})"
 
 
+class cast(TensorExpression):
+  """Casts the element type to a type (typically symbolic TypeVar)."""
+
+  def __init__(self, to_type: TypeVar, operand: TensorExpression):
+    self.to_type = to_type
+    self.operand = operand
+
+  def to_scalar_expression(self) -> ScalarExpression:
+    return ScalarSymbolicCast(self.to_type,
+                              self.operand.to_scalar_expression()).expr()
+
+  def visit_affine_exprs(self, callback):
+    self.operand.visit_affine_exprs(callback)
+
+  def collect_uses(self, uses: Set["TensorUse"]):
+    self.operand.collect_uses(uses)
+
+  def __repr__(self):
+    return f"cast({self.to_type}, {repr(self.operand)})"
+
+
 class ReduceApply(TensorExpression):
   """Application of a reduction.
 
