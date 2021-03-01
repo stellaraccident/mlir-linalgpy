@@ -137,15 +137,16 @@ class TensorDef:
                              allow_new_symbols=False)
     if not isinstance(dims, tuple):
       dims = (dims,)  # Handle single subscript case.
+    # Special case: (None) is a 0d-scalar use.
+    if dims == (None,):
+      dims = ()
+
     exprs = []
     for expr_def in dims:
       if not isinstance(expr_def, AffineExprDef):
         raise KeyError(
             "A TensorDef can only be subscripted by a tuple of affine dims")
       exprs.append(expr_def)
-    # indexing_map = _ir.AffineMap.get(dim_count=state.dim_count,
-    #                                  symbol_count=state.symbol_count,
-    #                                  exprs=exprs)
     return TensorUse(self, exprs)
 
   def __setitem__(self, dims, value):
