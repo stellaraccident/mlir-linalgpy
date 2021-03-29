@@ -1,3 +1,7 @@
+# DEPRECATED
+
+All of the code in this project has been submitted upstream to LLVM/MLIR. 
+
 # linalgpy - Experimental linalg python frontend
 
 This project is just some prototyping of a python frontend to the MLIR
